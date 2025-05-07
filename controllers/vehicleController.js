@@ -1,5 +1,6 @@
 const VehicleList = require('../models/VehicleList');
 const s3 = require('../config/aws');
+//const { ALLOWED_MAKES } = require('../config/make_contents');
 
 
 // Create an image from a base64 encoded string
@@ -22,6 +23,10 @@ exports.createVehicle = async (req, res) => {
   console.log(req.body);
   try {
     const { title, make, model, year, price, mileage, location, status, imageUrl } = req.body;
+
+    // if (!ALLOWED_MAKES.includes(make)) {
+    //   return res.status(400).json({ message: 'Invalid vehicle make selected' });
+    // }
 
     if (!imageUrl) {
       return res.status(400).json({ message: 'Vehicle image is required' });
@@ -104,11 +109,48 @@ exports.getVehicleById = async (req, res) => {
 // Update vehicle
 exports.updateVehicle = async (req, res) => {
   try {
-    const vehicle = await VehicleList.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
-    res.json(vehicle);
+    const { title, make, model, year, price, mileage, location, status, imageUrl } = req.body;
+
+    // // Validate make
+    // if (make && !ALLOWED_MAKES.includes(make)) {
+    //   return res.status(400).json({ message: 'Invalid car make' });
+    // }
+
+    const updateData = { title, make, model, year, price, mileage, location, status };
+
+    // If imageUrl (base64) is provided, upload to S3
+    if (imageUrl) {
+      const imageData = decodeBase64Image(imageUrl);
+      if (imageData instanceof Error) {
+        return res.status(400).json({ message: 'Invalid image data' });
+      }
+
+      const params = {
+        Bucket: process.env.AWS_BUCKET,
+        Key: `${req.params.id}-${Date.now()}.png`,
+        Body: imageData.data,
+        ContentType: imageData.type,
+        ACL: 'public-read'
+      };
+
+      const uploadResult = await s3.upload(params).promise();
+      updateData.imageUrl = [uploadResult.Location]; // If multiple images, store as array
+    }
+
+    const updatedVehicle = await VehicleList.findByIdAndUpdate(req.params.id, updateData, { new: true });
+
+    if (!updatedVehicle) {
+      return res.status(404).json({ message: 'Vehicle not found' });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: updatedVehicle
+    });
+
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('Error updating vehicle:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
