@@ -8,11 +8,8 @@ const vehicleSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   mileage: { type: Number, required: true },
   location: { type: String, required: true },
-  imageUrl: { type: String},
-  status: { type: String, required: true, default: "active" }
-}, {
-  timestamps: true,
-  collection: 'vehicle-list' 
-});
+  status: { type: String, required: true, default: 'active' },
+  imageUrl: { type: [String], required: false } // Array of image URLs
+}, { timestamps: true });
 
 module.exports = mongoose.model('VehicleList', vehicleSchema);
