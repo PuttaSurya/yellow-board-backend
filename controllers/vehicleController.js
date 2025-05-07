@@ -1,16 +1,86 @@
 const VehicleList = require('../models/VehicleList');
+const s3 = require('../config/aws');
 
 
+// Create an image from a base64 encoded string
+function decodeBase64Image(dataString) {
+  const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  const response = {};
+
+  if (matches.length !== 3) {
+      return new Error('Invalid input string');
+  }
+
+  response.type = matches[1];
+  response.data = Buffer.from(matches[2], 'base64');
+
+  return response;
+}
+
+// Create a vehicle
 exports.createVehicle = async (req, res) => {
+  console.log(req.body);
   try {
-    const vehicle = new VehicleList(req.body);
-    const saved = await vehicle.save();
-    res.status(201).json(saved);
+    const { title, make, model, year, price, mileage, location, status, imageUrl } = req.body;
+
+    if (!imageUrl) {
+      return res.status(400).json({ message: 'Vehicle image is required' });
+    }
+
+    const imageData = await decodeBase64Image(imageUrl);
+    console.log('imageData', imageData);
+    if (imageData instanceof Error) {
+        return res.status(400).json({message: 'Invalid vehicle image data'});
+    }
+
+    const vehicleData = {
+      title,
+      make,
+      model,
+      year,
+      price,
+      mileage,
+      location,
+      status
+    };
+
+    const vehicle = new VehicleList(vehicleData);
+    let savedVehicle = await vehicle.save();
+
+    console.log('savedVehicle', savedVehicle);
+
+    const params = {
+      Bucket: process.env.AWS_BUCKET,
+      Key: `${savedVehicle._id}.png`,
+      Body: imageData.data,
+      ContentType: imageData.type,
+      ACL: 'public-read'
+    };
+
+    console.log('params', params);
+
+    const data = await s3.upload(params).promise();
+    console.log('data', data);
+
+    const imageLocation = [];
+    imageLocation.push(data.Location);
+    savedVehicle = await VehicleList.findByIdAndUpdate(savedVehicle._id, { imageUrl: imageLocation }, { new: true });
+    console.log('savedVehicle', savedVehicle);
+
+    res.status(201).json({
+      status: 'success',
+      data: savedVehicle
+    });
+
+
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('Error saving vehicle:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
+
+// Get all vehicles
 exports.getVehicles = async (req, res) => {
   try {
     const vehicles = await VehicleList.find();
@@ -20,7 +90,7 @@ exports.getVehicles = async (req, res) => {
   }
 };
 
-
+// Get vehicle by ID
 exports.getVehicleById = async (req, res) => {
   try {
     const vehicle = await VehicleList.findById(req.params.id);
@@ -31,7 +101,7 @@ exports.getVehicleById = async (req, res) => {
   }
 };
 
-
+// Update vehicle
 exports.updateVehicle = async (req, res) => {
   try {
     const vehicle = await VehicleList.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -42,7 +112,7 @@ exports.updateVehicle = async (req, res) => {
   }
 };
 
-
+// Delete vehicle
 exports.deleteVehicle = async (req, res) => {
   try {
     const deleted = await VehicleList.findByIdAndDelete(req.params.id);

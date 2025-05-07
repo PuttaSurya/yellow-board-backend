@@ -3,6 +3,7 @@ const app = express();
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const createError = require('http-errors');
+const path = require('path');
 const routes = require('../Routes/index.js')  
 const passport = require('../middleware/passport');
 const session = require('express-session');
@@ -15,8 +16,8 @@ app.use(session({
   
 
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // app.use(cookieParser());
 // app.use(compress());
