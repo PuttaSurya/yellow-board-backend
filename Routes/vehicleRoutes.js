@@ -16,5 +16,9 @@ router.get('/', vehicleController.getVehicles);
 router.get('/:id', vehicleController.getVehicleById);
 router.put('/:id', vehicleController.updateVehicle);
 router.delete('/:id', vehicleController.deleteVehicle);
+router.post('/search', vehicleController.searchVehicles);
+router.post('/bus', vehicleController.getBusVehicles);
+router.post('/bus-spare', vehicleController.getBusSpareVehicles);
+
 
 module.exports = router;
