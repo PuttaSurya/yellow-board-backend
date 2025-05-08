@@ -4,6 +4,7 @@ const VehicleMake = require('../models/VehicleMake');
 const { ALLOWED_MAKES } = require('../config/make_constants');
 
 
+
 // Create an image from a base64 encoded string
 function decodeBase64Image(dataString) {
   const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
@@ -26,6 +27,10 @@ exports.createVehicle = async (req, res) => {
   
       if (!imageUrl) {
         return res.status(400).json({ message: 'Vehicle image is required' });
+      }
+
+      if (!ALLOWED_MAKES.includes(make)) {
+        return res.status(400).json({ message: 'Invalid vehicle make' });
       }
   
       const imageData = await decodeBase64Image(imageUrl);
@@ -102,7 +107,12 @@ exports.updateVehicle = async (req, res) => {
     try {
       const { title, make, model, year, price, mileage, location, status, imageUrl, partNumber } = req.body;
   
-      const updateData = { title, make, model, year, price, mileage, location, status, partNumber };  // Add partNumber here
+      const updateData = { title, make, model, year, price, mileage, location, status, partNumber };
+
+      // Check if make is allowed
+      if (!ALLOWED_MAKES.includes(make)) {
+        return res.status(400).json({ message: 'Invalid vehicle make' });
+      }
   
       // If imageUrl (base64) is provided, upload to S3
       if (imageUrl) {
@@ -136,6 +146,34 @@ exports.updateVehicle = async (req, res) => {
   
     } catch (err) {
       console.error('Error updating vehicle:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  };
+
+  exports.getMakeCounts = async (req, res) => {
+    try {
+      const makeCounts = await VehicleList.aggregate([
+        {
+          $group: {
+            _id: '$make',
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $project: {
+            make: '$_id',
+            count: 1,
+            _id: 0
+          }
+        },
+        {
+          $sort: { count: -1 }
+        }
+      ]);
+  
+      res.status(200).json(makeCounts);
+    } catch (err) {
+      console.error('Error getting make counts:', err);
       res.status(500).json({ error: 'Server error' });
     }
   };
