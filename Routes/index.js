@@ -8,6 +8,6 @@ router.use('/auth', authRoutes);
 
 router.use('/vehicle', vehicleRoutes);
 
-router.use('/make', makeRoutes);
+router.use('/makes', makeRoutes);
 
 module.exports = router;

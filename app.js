@@ -8,7 +8,7 @@ require('./database/mongoose');
 // module.parent check is required to support mocha watch
 if (!module.parent) {
     app.listen(config.APP_RUNNING_PORT, () => {
-        console.info(`server started on port ${config.APP_RUNNING_PORT} (${config.NODE_ENV})`);
+    console.info(`server started on port ${config.APP_RUNNING_PORT} (${config.NODE_ENV})`);
     });
 }
 

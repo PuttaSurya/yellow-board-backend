@@ -2,7 +2,8 @@ const multer = require('multer');
 const multerS3 = require('multer-s3');
 const s3 = require('../config/aws');
 
-const upload = multer({
+// Multer configuration for S3 storage
+const uploadS3 = multer({
   storage: multerS3({
     s3: s3,
     bucket: process.env.AWS_BUCKET,
@@ -15,4 +16,8 @@ const upload = multer({
   })
 });
 
-module.exports = upload.array('images', 5); // Max 5 images
+// Export for array of images (adjust the limit as needed)
+module.exports = {
+  uploadS3: uploadS3.array('images', 5),  // Max 5 images
+  uploadNone: multer() // For handling non-file form data
+};
