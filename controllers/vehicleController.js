@@ -1,6 +1,7 @@
 const VehicleList = require('../models/VehicleList');
 const s3 = require('../config/aws');
-//const { ALLOWED_MAKES } = require('../config/make_contents');
+const VehicleMake = require('../models/VehicleMake');
+const { ALLOWED_MAKES } = require('../config/make_constants');
 
 
 // Create an image from a base64 encoded string
@@ -83,6 +84,7 @@ exports.getVehicles = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // Get vehicle by ID
 exports.getVehicleById = async (req, res) => {
