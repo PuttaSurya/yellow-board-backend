@@ -25,7 +25,7 @@ exports.createVehicle = async (req, res) => {
       const {
         title, make, model, price,  location, status,
         imageUrl, type, partNumber, distance_traveled, fuel_efficiency,
-        fuel_type, seating_capacity, year_manufacture, maintenance_record,
+        fuel_type, seating_capacity, cabin_tpye, year_manufacture, maintenance_record,
         upgrades, condition, description
       } = req.body;
   
@@ -44,7 +44,7 @@ exports.createVehicle = async (req, res) => {
   
       const vehicleData = {
         title, make, model, price, location, status, type,
-        partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity,
+        partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
         year_manufacture, maintenance_record, upgrades, condition, description,
         userId: req.user.id
       };
@@ -77,7 +77,6 @@ exports.createVehicle = async (req, res) => {
       res.status(500).json({ error: 'Server error' });
     }
   };
-  
 
 exports.getVehicles = async (req, res) => {
   try {
@@ -107,8 +106,6 @@ exports.getVehicles = async (req, res) => {
   }
 };
 
-  
-
 
 // Get vehicle by ID
 exports.getVehicleById = async (req, res) => {
@@ -126,13 +123,13 @@ exports.updateVehicle = async (req, res) => {
     try {
       const {
         title, make, model, price, location, status, imageUrl,
-        partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity,
+        partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
         year_manufacture, maintenance_record, upgrades, condition, description
       } = req.body;
   
       const updateData = {
         title, make, model, price, location, status, partNumber,
-        distance_traveled, fuel_efficiency, fuel_type, seating_capacity,
+        distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
         year_manufacture, maintenance_record, upgrades, condition, description
       };
   
@@ -180,6 +177,9 @@ exports.updateVehicle = async (req, res) => {
   exports.getMakeCounts = async (req, res) => {
     try {
       const makeCounts = await VehicleList.aggregate([
+        {
+          $match: { type: 'bus'}
+        },
         {
           $group: {
             _id: '$make',
@@ -287,8 +287,16 @@ exports.searchVehicles = async (req, res) => {
   }
 };
 
-  
-  
+exports.getAllLocations = async (req, res) => {
+  try {
+    const locations = await VehicleList.distinct('location');
+    res.status(200).json({ locations });
+  } catch (error) {
+    console.error('Error fetching locations:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 
   // GET /vehicles/type/bus
 exports.getBusVehicles = async (req, res) => {

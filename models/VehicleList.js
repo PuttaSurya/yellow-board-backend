@@ -15,15 +15,16 @@ const vehicleSchema = new mongoose.Schema({
     required: true
   },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  distance_traveled: { type: Number, required: false },
+  distance_traveled: { type: Number, required: true },
   fuel_efficiency: { type: Number, required: false },
   fuel_type: {
     type: String,
-    enum: ['Petrol', 'Diesel', 'Electric', 'CNG', 'fuel'],
-    default: 'fuel'
+    enum: ['Diesel', 'Electric', 'CNG'],
+    default: 'Diesel'
   },
-  seating_capacity: { type: Number, required: false },
-  year_manufacture: { type: Number, required: false },
+  seating_capacity: { type: Number, required: true },
+  cabin_tpye: { type: String, required: false },
+  year_manufacture: { type: Number, required: true },
   maintenance_record: { type: String, required: false },
   upgrades: { type: String, required: false },
   condition: { type: String, required: false },
