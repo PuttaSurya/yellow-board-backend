@@ -13,7 +13,7 @@ router.post('/add', upload.uploadS3,ensureAuthenticated, vehicleController.creat
 // Use uploadNone for non-file data (if needed)
 router.post('/add-non-file', upload.uploadNone.none(), vehicleController.createVehicle);
 
-
+router.get('/locations', vehicleController.getAllLocations);
 router.get('/make-counts', vehicleController.getMakeCounts);
 router.get('/all',ensureAuthenticated, vehicleController.getVehicles);
 router.get('/:id', vehicleController.getVehicleById);
