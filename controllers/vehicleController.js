@@ -21,34 +21,32 @@ function decodeBase64Image(dataString) {
 }
 
 exports.createVehicle = async (req, res) => {
-    console.log(req.body);
     try {
-      const { title, make, model, year, price, mileage, location, status, imageUrl, type, partNumber } = req.body;
+      const {
+        title, make, model, price,  location, status,
+        imageUrl, type, partNumber, distance_traveled, fuel_efficiency,
+        fuel_type, seating_capacity, year_manufacture, maintenance_record,
+        upgrades, condition, description
+      } = req.body;
   
       if (!imageUrl) {
         return res.status(400).json({ message: 'Vehicle image is required' });
       }
-
+  
       if (!ALLOWED_MAKES.includes(make)) {
         return res.status(400).json({ message: 'Invalid vehicle make' });
       }
   
-      const imageData = await decodeBase64Image(imageUrl);
+      const imageData = decodeBase64Image(imageUrl);
       if (imageData instanceof Error) {
         return res.status(400).json({ message: 'Invalid vehicle image data' });
       }
   
       const vehicleData = {
-        title,
-        make,
-        model,
-        year,
-        price,
-        mileage,
-        location,
-        status,
-        type,
-        partNumber  
+        title, make, model, price, location, status, type,
+        partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity,
+        year_manufacture, maintenance_record, upgrades, condition, description,
+        userId: req.user.id
       };
   
       const vehicle = new VehicleList(vehicleData);
@@ -63,32 +61,53 @@ exports.createVehicle = async (req, res) => {
       };
   
       const data = await s3.upload(params).promise();
+      const imageLocation = [data.Location];
   
-      const imageLocation = [];
-      imageLocation.push(data.Location);
-      savedVehicle = await VehicleList.findByIdAndUpdate(savedVehicle._id, { imageUrl: imageLocation }, { new: true });
+      savedVehicle = await VehicleList.findByIdAndUpdate(
+        savedVehicle._id,
+        { imageUrl: imageLocation },
+        { new: true }
+      );
   
       res.status(201).json({
         status: 'success',
         data: savedVehicle
       });
-  
     } catch (err) {
-      console.error('Error saving vehicle:', err);
       res.status(500).json({ error: 'Server error' });
     }
   };
   
 
-// Get all vehicles
 exports.getVehicles = async (req, res) => {
   try {
-    const vehicles = await VehicleList.find();
-    res.json(vehicles);
+    const userId = req.user.id; // From authenticated user
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const filter = { userId };
+
+    const vehicles = await VehicleList.find(filter)
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 });
+
+    const totalCount = await VehicleList.countDocuments(filter);
+
+    res.json({
+      data: vehicles,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCount / limit),
+      totalCount
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
+  
 
 
 // Get vehicle by ID
@@ -105,16 +124,22 @@ exports.getVehicleById = async (req, res) => {
 
 exports.updateVehicle = async (req, res) => {
     try {
-      const { title, make, model, year, price, mileage, location, status, imageUrl, partNumber } = req.body;
+      const {
+        title, make, model, price, location, status, imageUrl,
+        partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity,
+        year_manufacture, maintenance_record, upgrades, condition, description
+      } = req.body;
   
-      const updateData = { title, make, model, year, price, mileage, location, status, partNumber };
-
-      // Check if make is allowed
+      const updateData = {
+        title, make, model, price, location, status, partNumber,
+        distance_traveled, fuel_efficiency, fuel_type, seating_capacity,
+        year_manufacture, maintenance_record, upgrades, condition, description
+      };
+  
       if (!ALLOWED_MAKES.includes(make)) {
         return res.status(400).json({ message: 'Invalid vehicle make' });
       }
   
-      // If imageUrl (base64) is provided, upload to S3
       if (imageUrl) {
         const imageData = decodeBase64Image(imageUrl);
         if (imageData instanceof Error) {
@@ -130,10 +155,14 @@ exports.updateVehicle = async (req, res) => {
         };
   
         const uploadResult = await s3.upload(params).promise();
-        updateData.imageUrl = [uploadResult.Location]; // If multiple images, store as array
+        updateData.imageUrl = [uploadResult.Location];
       }
   
-      const updatedVehicle = await VehicleList.findByIdAndUpdate(req.params.id, updateData, { new: true });
+      const updatedVehicle = await VehicleList.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true }
+      );
   
       if (!updatedVehicle) {
         return res.status(404).json({ message: 'Vehicle not found' });
@@ -143,9 +172,7 @@ exports.updateVehicle = async (req, res) => {
         status: 'success',
         data: updatedVehicle
       });
-  
     } catch (err) {
-      console.error('Error updating vehicle:', err);
       res.status(500).json({ error: 'Server error' });
     }
   };
