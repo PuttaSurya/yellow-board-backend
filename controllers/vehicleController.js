@@ -126,23 +126,23 @@ exports.updateVehicle = async (req, res) => {
         partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
         year_manufacture, maintenance_record, upgrades, condition, description
       } = req.body;
-  
+
       const updateData = {
         title, make, model, price, location, status, partNumber,
         distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
         year_manufacture, maintenance_record, upgrades, condition, description
       };
-  
+
       if (!ALLOWED_MAKES.includes(make)) {
         return res.status(400).json({ message: 'Invalid vehicle make' });
       }
-  
-      if (imageUrl) {
+
+      if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('data:image')) {
         const imageData = decodeBase64Image(imageUrl);
         if (imageData instanceof Error) {
           return res.status(400).json({ message: 'Invalid image data' });
         }
-  
+      
         const params = {
           Bucket: process.env.AWS_BUCKET,
           Key: `${req.params.id}-${Date.now()}.png`,
@@ -150,30 +150,33 @@ exports.updateVehicle = async (req, res) => {
           ContentType: imageData.type,
           ACL: 'public-read'
         };
-  
-        const uploadResult = await s3.upload(params).promise();
-        updateData.imageUrl = [uploadResult.Location];
+      
+        const command = new PutObjectCommand(params);
+        const uploadResult = await s3Client.send(command);
+      
+        updateData.imageUrl = [`https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${params.Key}`];
       }
-  
+      
+
       const updatedVehicle = await VehicleList.findByIdAndUpdate(
         req.params.id,
         updateData,
-        { new: true }
+        { new: true, runValidators: true }
       );
-  
+
       if (!updatedVehicle) {
         return res.status(404).json({ message: 'Vehicle not found' });
       }
-  
+
       res.status(200).json({
         status: 'success',
         data: updatedVehicle
       });
     } catch (err) {
-      res.status(500).json({ error: 'Server error' });
+      console.error('Error updating vehicle:', err);
+      res.status(500).json({ message: 'Error updating vehicle', error: err.message });
     }
-  };
-
+};
   exports.getMakeCounts = async (req, res) => {
     try {
       const makeCounts = await VehicleList.aggregate([
@@ -218,84 +221,103 @@ exports.deleteVehicle = async (req, res) => {
 };
 
 
-exports.searchVehicles = async (req, res) => {
-  try {
-    const {
-      status,
-      make,
-      type, 
-      minPrice,
-      maxPrice,
-      minYear,
-      maxYear,
-      page = 1,
-      limit = 10
-    } = req.body;
-
-    const skip = (page - 1) * limit;
-    const filter = {};
-
-    if (status && status !== 'All') {
-      filter.status = status;
-    }
-
-    if (make) {
-      filter.make = make;
-    }
-
-    if (type) {
-      filter.type = type; 
-    }
-
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      filter.price = {};
-      if (minPrice !== undefined) {
-        filter.price.$gte = Number(minPrice);
-      }
-      if (maxPrice !== undefined) {
-        filter.price.$lte = Number(maxPrice);
-      }
-    }
-
-    if (minYear !== undefined || maxYear !== undefined) {
-      filter.year = {};
-      if (minYear !== undefined) {
-        filter.year.$gte = Number(minYear);
-      }
-      if (maxYear !== undefined) {
-        filter.year.$lte = Number(maxYear);
-      }
-    }
-
-    const vehicles = await VehicleList.find(filter)
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 });
-
-    const totalCount = await VehicleList.countDocuments(filter);
-
-    res.json({
-      data: vehicles,
-      page,
-      limit,
-      totalPages: Math.ceil(totalCount / limit),
-      totalCount
-    });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
 exports.getAllLocations = async (req, res) => {
-  try {
-    const locations = await VehicleList.distinct('location');
-    res.status(200).json({ locations });
-  } catch (error) {
-    console.error('Error fetching locations:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
+    try {
+      const locations = await VehicleList.distinct('location', { type: 'bus' });
+      res.status(200).json({ locations });
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  };
+  
+
+  exports.searchVehicles = async (req, res) => {
+    try {
+      const {
+        status,
+        make,
+        type,
+        minPrice,
+        maxPrice,
+        minYear,
+        maxYear,
+        minDistance,
+        maxDistance,
+        location,
+      } = req.body;
+  
+      const filter = {};
+  
+      // Filter by status
+      if (status && status !== 'All') {
+        filter.status = status;
+      }
+  
+      // Filter by make
+      if (make) {
+        const makesArray = make.split(',').map((m) => m.trim());
+        filter.make = { $in: makesArray };
+      }
+  
+      // Filter by type
+      if (type) {
+        filter.type = type;
+      }
+  
+      // Filter by price range
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        filter.price = {};
+        if (minPrice !== undefined) {
+          filter.price.$gte = Number(minPrice);
+        }
+        if (maxPrice !== undefined) {
+          filter.price.$lte = Number(maxPrice);
+        }
+      }
+  
+      // Filter by year of manufacture
+      if (minYear !== undefined || maxYear !== undefined) {
+        filter.year_manufacture = {};
+        if (minYear !== undefined) {
+          filter.year_manufacture.$gte = Number(minYear);
+        }
+        if (maxYear !== undefined) {
+          filter.year_manufacture.$lte = Number(maxYear);
+        }
+      }
+  
+      // Filter by distance_traveled
+      if (minDistance !== undefined || maxDistance !== undefined) {
+        filter.distance_traveled = {};
+        if (minDistance !== undefined) {
+          filter.distance_traveled.$gte = Number(minDistance);
+        }
+        if (maxDistance !== undefined) {
+          filter.distance_traveled.$lte = Number(maxDistance);
+        }
+      }
+  
+      // Filter by state from location
+      if (location) {
+        const statesArray = location.split(',').map((state) => state.trim());
+        filter.$or = statesArray.map((state) => ({
+          location: { $regex: new RegExp(`,\\s*${state}$`, 'i') },
+        }));
+      }
+  
+      const vehicles = await VehicleList.find(filter).sort({ createdAt: -1 });
+  
+      res.json({
+        data: vehicles,
+        totalCount: vehicles.length,
+      });
+    } catch (err) {
+      console.error('Vehicle search failed:', err);
+      res.status(500).json({ error: err.message });
+    }
+  };
+  
 
 
   // GET /vehicles/type/bus
