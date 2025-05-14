@@ -26,6 +26,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 // Define allowed ports
 const allowedOrigins = [
     'http://localhost:8080',
+    'https://yellowboard.aultrapaints.com',
 ];
 
 
