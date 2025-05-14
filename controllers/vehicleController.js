@@ -24,7 +24,7 @@ exports.createVehicle = async (req, res) => {
     try {
       const {
         title, make, model, price,  location, status,
-        imageUrl, type, partNumber, distance_traveled, fuel_efficiency,
+        imageUrl, distance_traveled, fuel_efficiency,
         fuel_type, seating_capacity, cabin_tpye, year_manufacture, maintenance_record,
         upgrades, condition, description
       } = req.body;
@@ -43,8 +43,7 @@ exports.createVehicle = async (req, res) => {
       }
   
       const vehicleData = {
-        title, make, model, price, location, status, type,
-        partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
+        title, make, model, price, location, status, distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
         year_manufacture, maintenance_record, upgrades, condition, description,
         userId: req.user.id
       };
@@ -53,7 +52,7 @@ exports.createVehicle = async (req, res) => {
       let savedVehicle = await vehicle.save();
   
       const params = {
-        Bucket: process.env.AWS_BUCKET,
+        Bucket: process.env.AWS_BUCKET_VEHICLES,
         Key: `${savedVehicle._id}.png`,
         Body: imageData.data,
         ContentType: imageData.type,
@@ -78,34 +77,44 @@ exports.createVehicle = async (req, res) => {
     }
   };
 
-exports.getVehicles = async (req, res) => {
-  try {
-    const userId = req.user.id; // From authenticated user
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
 
-    const filter = { userId };
-
-    const vehicles = await VehicleList.find(filter)
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 });
-
-    const totalCount = await VehicleList.countDocuments(filter);
-
-    res.json({
-      data: vehicles,
-      page,
-      limit,
-      totalPages: Math.ceil(totalCount / limit),
-      totalCount
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
+  exports.getAllVehiclesByUserId = async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { status } = req.query.page || {}; 
+      const page = parseInt(req.query.page?.page) || 1;  // Default page 1
+      const limit = parseInt(req.query.page?.limit) || 10; // Default limit 10
+  
+      // Filter by userId and optional status
+      const query = { userId };
+      if (status) query.status = status;
+  
+      // Fetch vehicles with pagination
+      const vehicles = await VehicleList.find(query)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .sort({ createdAt: -1 });
+  
+      // Get total count for pagination
+      const totalCount = await VehicleList.countDocuments(query);
+  
+      res.status(200).json({
+        status: 'success',
+        data: vehicles,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(totalCount / limit),
+          totalCount,
+          pageSize: limit
+        }
+      });
+    } catch (err) {
+      console.error('Error fetching user vehicles:', err);
+      res.status(500).json({ error: err.message });
+    }
+  };
+  
+  
 
 // Get vehicle by ID
 exports.getVehicleById = async (req, res) => {
@@ -123,20 +132,20 @@ exports.updateVehicle = async (req, res) => {
     try {
       const {
         title, make, model, price, location, status, imageUrl,
-        partNumber, distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
+        distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
         year_manufacture, maintenance_record, upgrades, condition, description
       } = req.body;
-
+  
       const updateData = {
-        title, make, model, price, location, status, partNumber,
+        title, make, model, price, location, status,
         distance_traveled, fuel_efficiency, fuel_type, seating_capacity, cabin_tpye,
         year_manufacture, maintenance_record, upgrades, condition, description
       };
-
+  
       if (!ALLOWED_MAKES.includes(make)) {
         return res.status(400).json({ message: 'Invalid vehicle make' });
       }
-
+  
       if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('data:image')) {
         const imageData = decodeBase64Image(imageUrl);
         if (imageData instanceof Error) {
@@ -144,30 +153,29 @@ exports.updateVehicle = async (req, res) => {
         }
       
         const params = {
-          Bucket: process.env.AWS_BUCKET,
+          Bucket: process.env.AWS_BUCKET_VEHICLES,
           Key: `${req.params.id}-${Date.now()}.png`,
           Body: imageData.data,
           ContentType: imageData.type,
           ACL: 'public-read'
         };
       
-        const command = new PutObjectCommand(params);
-        const uploadResult = await s3Client.send(command);
-      
-        updateData.imageUrl = [`https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${params.Key}`];
+        const data = await s3.upload(params).promise();
+        const imageLocation = [data.Location];
+        
+        updateData.imageUrl = imageLocation; // Add this line to update the imageUrl
       }
-      
-
+  
       const updatedVehicle = await VehicleList.findByIdAndUpdate(
         req.params.id,
         updateData,
         { new: true, runValidators: true }
       );
-
+  
       if (!updatedVehicle) {
         return res.status(404).json({ message: 'Vehicle not found' });
       }
-
+  
       res.status(200).json({
         status: 'success',
         data: updatedVehicle
@@ -176,30 +184,28 @@ exports.updateVehicle = async (req, res) => {
       console.error('Error updating vehicle:', err);
       res.status(500).json({ message: 'Error updating vehicle', error: err.message });
     }
-};
+  };
+  
   exports.getMakeCounts = async (req, res) => {
     try {
-      const makeCounts = await VehicleList.aggregate([
-        {
-          $match: { type: 'bus'}
-        },
-        {
-          $group: {
-            _id: '$make',
-            count: { $sum: 1 }
-          }
-        },
-        {
-          $project: {
-            make: '$_id',
-            count: 1,
-            _id: 0
-          }
-        },
-        {
-          $sort: { count: -1 }
-        }
-      ]);
+        const makeCounts = await VehicleList.aggregate([
+            {
+              $group: {
+                _id: '$make',
+                count: { $sum: 1 }
+              }
+            },
+            {
+              $project: {
+                make: '$_id',
+                count: 1,
+                _id: 0
+              }
+            },
+            {
+              $sort: { count: -1 }
+            }
+          ]);          
   
       res.status(200).json(makeCounts);
     } catch (err) {
@@ -223,7 +229,7 @@ exports.deleteVehicle = async (req, res) => {
 
 exports.getAllLocations = async (req, res) => {
     try {
-      const locations = await VehicleList.distinct('location', { type: 'bus' });
+      const locations = await VehicleList.distinct('location');
       res.status(200).json({ locations });
     } catch (error) {
       console.error('Error fetching locations:', error);
@@ -231,13 +237,13 @@ exports.getAllLocations = async (req, res) => {
     }
   };
   
+  
 
   exports.searchVehicles = async (req, res) => {
     try {
       const {
         status,
         make,
-        type,
         minPrice,
         maxPrice,
         minYear,
@@ -260,10 +266,6 @@ exports.getAllLocations = async (req, res) => {
         filter.make = { $in: makesArray };
       }
   
-      // Filter by type
-      if (type) {
-        filter.type = type;
-      }
   
       // Filter by price range
       if (minPrice !== undefined || maxPrice !== undefined) {
@@ -318,60 +320,26 @@ exports.getAllLocations = async (req, res) => {
     }
   };
   
-
-
-  // GET /vehicles/type/bus
-exports.getBusVehicles = async (req, res) => {
+// GET /vehicles/all
+exports.getAllVehicles = async (req, res) => {
     try {
-      const { page = 1, limit = 10 } = req.body;
-      const skip = (page - 1) * limit;
-  
-      const filter = { type: 'bus' };
-  
-      const vehicles = await VehicleList.find(filter)
-        .skip(skip)
-        .limit(limit)
-        .sort({ createdAt: -1 });
-  
-      const totalCount = await VehicleList.countDocuments(filter);
+      const vehicles = await VehicleList.find({ status: { $ne: 'sold' } })
+        .sort({ 
+          status: -1,      
+          createdAt: -1 
+        });
   
       res.json({
         data: vehicles,
-        page,
-        limit,
-        totalPages: Math.ceil(totalCount / limit),
-        totalCount
+        totalCount: vehicles.length
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   };
   
-  // GET /vehicles/type/bus-spare
-  exports.getBusSpareVehicles = async (req, res) => {
-    try {
-      const { page = 1, limit = 10 } = req.body;
-      const skip = (page - 1) * limit;
   
-      const filter = { type: 'bus-spare' };
   
-      const vehicles = await VehicleList.find(filter)
-        .skip(skip)
-        .limit(limit)
-        .sort({ createdAt: -1 });
-  
-      const totalCount = await VehicleList.countDocuments(filter);
-  
-      res.json({
-        data: vehicles,
-        page,
-        limit,
-        totalPages: Math.ceil(totalCount / limit),
-        totalCount
-      });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  };
+
   
   

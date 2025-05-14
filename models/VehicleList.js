@@ -8,12 +8,6 @@ const vehicleSchema = new mongoose.Schema({
   location: { type: String, required: true },
   status: { type: String, required: true, default: 'active' },
   imageUrl: { type: [String], required: false },
-  partNumber: { type: String, required: false },
-  type: {
-    type: String,
-    enum: ['bus', 'bus-spare'],
-    required: true
-  },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   distance_traveled: { type: Number, required: true },
   fuel_efficiency: { type: Number, required: false },
